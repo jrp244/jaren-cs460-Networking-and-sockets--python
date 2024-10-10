@@ -1,0 +1,63 @@
+from cougarnet.sim.host import BaseHost
+import time
+
+def bytes_to_hex(byte_array, x, y=None):
+    extractedBytes = byte_array[x:y]
+    hexRep = extractedBytes.hex()
+    return hexRep
+
+def add_vlan_tag(frame, vlan_id):
+        destMac = frame[0:6]
+        srcMac = frame[6:12]
+        etherType = frame[12:14]
+        payload = frame[14:]
+
+        _802 = b'\x81\x00'
+        zeros = b'\x00'
+        vlanIdBits = vlan_id.to_bytes(2, byteorder='big')
+        vlanHeader = _802 + zeros + vlanIdBits
+        new_frame = destMac + srcMac + vlanHeader + etherType + payload
+        return new_frame
+    
+def remove_vlan_tag(byteArray):
+    return byteArray[:12] + byteArray[16:]
+
+class Switch(BaseHost):
+    table = {}
+
+    def __init__(self):
+        super().__init__()
+
+    def _handle_frame(self, frame: bytes, intf: str) -> None:
+        dest = bytes_to_hex(frame, 0, 5)
+        src = bytes_to_hex(frame, 6, 11)
+        _8021Q = bytes_to_hex(frame, 12, 13)
+        vlanId = None
+
+        if _8021Q == '81':
+            vlanId = int(bytes_to_hex(frame[16:17], 0), 16)
+            frame = remove_vlan_tag(frame)
+        
+        self.table[src] = {'intf': intf, 'expiresAt': time.time() + 8}
+
+        if dest in self.table and self.table[dest]['expiresAt'] > time.time() and dest != 'ffffffffffff':
+            if vlanId == self.int_to_vlan[self.table[dest]['intf']] or self.int_to_vlan[self.table[dest]['intf']] == self.int_to_vlan[intf]:
+                self.send_frame(frame,self.table[dest]['intf'])
+            elif self.is_trunk_link(self.table[dest]['intf']):
+                self.send_frame(add_vlan_tag(frame, self.int_to_vlan[intf]), self.table[dest]['intf'])
+        else:
+            if (vlanId != None):
+                srcVlan = vlanId
+            else:
+                srcVlan = self.int_to_vlan[intf]
+            for myintf in self.interfaces():
+                if myintf != intf and myintf in self.int_to_vlan and self.int_to_vlan[myintf] == srcVlan:
+                    self.send_frame(frame, myintf)
+                elif myintf != intf and myintf in self.int_to_vlan and self.is_trunk_link(myintf):
+                    self.send_frame(add_vlan_tag(frame, srcVlan), myintf)
+
+def main():
+    Switch.run()
+
+if __name__ == '__main__':
+    main()

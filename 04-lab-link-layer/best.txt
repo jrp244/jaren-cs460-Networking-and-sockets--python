@@ -2,29 +2,7 @@
 
 import asyncio
 import struct
-import time
 from cougarnet.sim.host import BaseHost
-
-def bytes_to_hex(byte_array, x, y=None):
-    extractedBytes = byte_array[x:y]
-    hexRep = extractedBytes.hex()
-    return hexRep
-
-def add_vlan_tag(frame, vlan_id):
-    destMac = frame[0:6]
-    srcMac = frame[6:12]
-    etherType = frame[12:14]
-    payload = frame[14:]
-
-    _802 = b'\x81\x00'
-    zeros = b'\x00'
-    vlanIdBits = vlan_id.to_bytes(2, byteorder='big')
-    vlanHeader = _802 + zeros + vlanIdBits
-    new_frame = destMac + srcMac + vlanHeader + etherType + payload
-    return new_frame
-
-def remove_vlan_tag(byteArray):
-    return byteArray[:12] + byteArray[16:]
 
 class Switch(BaseHost):
     def __init__(self):
@@ -37,39 +15,46 @@ class Switch(BaseHost):
         src_mac = frame[6:12]
         
         # Update MAC table
-        self.mac_table[src_mac] = (intf, time.time())
+        self.mac_table[src_mac] = (intf, asyncio.get_event_loop().time())
         
-        # Handle VLANs
-        vlan_id = self.int_to_vlan.get(intf, 0)
+        # Handle VLANs (for Scenario 3)
+        vlan_id = self.int_to_vlan.get(intf, 0)  # Default to VLAN 0 if not specified
         if self.is_trunk_link(intf):
             if frame[12:14] == b'\x81\x00':  # 802.1Q VLAN tag
                 vlan_id = struct.unpack('!H', frame[14:16])[0] & 0x0FFF
-                frame = remove_vlan_tag(frame)
+                frame = frame[:12] + frame[16:]  # Remove VLAN tag
 
         # Determine outgoing interfaces
         if dst_mac == b'\xff\xff\xff\xff\xff\xff':  # Broadcast
-            self._flood_frame(frame, intf, vlan_id)
+            out_intfs = self._get_vlan_interfaces(vlan_id, exclude_intf=intf)
         elif dst_mac in self.mac_table:
             out_intf, _ = self.mac_table[dst_mac]
             if self.int_to_vlan.get(out_intf, 0) == vlan_id or self.is_trunk_link(out_intf):
-                self._send_frame(frame, out_intf, vlan_id)
+                out_intfs = [out_intf]
+            else:
+                out_intfs = []
         else:  # Unknown unicast
-            self._flood_frame(frame, intf, vlan_id)
+            out_intfs = self._get_vlan_interfaces(vlan_id, exclude_intf=intf)
 
-    def _flood_frame(self, frame, in_intf, vlan_id):
-        for out_intf in self.interfaces:
-            if out_intf != in_intf:
-                if vlan_id == 0 or self.int_to_vlan.get(out_intf, 0) == vlan_id or self.is_trunk_link(out_intf):
-                    self._send_frame(frame, out_intf, vlan_id)
+        # Forward frame
+        for out_intf in out_intfs:
+            self._send_frame(frame, out_intf, vlan_id)
+
+    def _get_vlan_interfaces(self, vlan_id, exclude_intf=None):
+        return [intf for intf in self.interfaces 
+                if (self.int_to_vlan.get(intf, 0) == vlan_id or self.is_trunk_link(intf)) 
+                and intf != exclude_intf]
 
     def _send_frame(self, frame, out_intf, vlan_id):
         if self.is_trunk_link(out_intf):
-            frame = add_vlan_tag(frame, vlan_id)
+            # Add VLAN tag for trunk links
+            vlan_tag = struct.pack('!H', 0x8100) + struct.pack('!H', vlan_id)
+            frame = frame[:12] + vlan_tag + frame[12:]
         self.send_frame(frame, out_intf)
 
     async def _clean_mac_table(self):
         while True:
-            current_time = time.time()
+            current_time = asyncio.get_event_loop().time()
             expired = [mac for mac, (_, timestamp) in self.mac_table.items()
                        if current_time - timestamp > self.aging_time]
             for mac in expired:

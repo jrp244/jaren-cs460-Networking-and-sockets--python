@@ -2,29 +2,7 @@
 
 import asyncio
 import struct
-import time
 from cougarnet.sim.host import BaseHost
-
-def bytes_to_hex(byte_array, x, y=None):
-    extractedBytes = byte_array[x:y]
-    hexRep = extractedBytes.hex()
-    return hexRep
-
-def add_vlan_tag(frame, vlan_id):
-    destMac = frame[0:6]
-    srcMac = frame[6:12]
-    etherType = frame[12:14]
-    payload = frame[14:]
-
-    _802 = b'\x81\x00'
-    zeros = b'\x00'
-    vlanIdBits = vlan_id.to_bytes(2, byteorder='big')
-    vlanHeader = _802 + zeros + vlanIdBits
-    new_frame = destMac + srcMac + vlanHeader + etherType + payload
-    return new_frame
-
-def remove_vlan_tag(byteArray):
-    return byteArray[:12] + byteArray[16:]
 
 class Switch(BaseHost):
     def __init__(self):
@@ -37,14 +15,14 @@ class Switch(BaseHost):
         src_mac = frame[6:12]
         
         # Update MAC table
-        self.mac_table[src_mac] = (intf, time.time())
+        self.mac_table[src_mac] = (intf, asyncio.get_event_loop().time())
         
-        # Handle VLANs
+        # Handle VLANs (for Scenario 3)
         vlan_id = self.int_to_vlan.get(intf, 0)
         if self.is_trunk_link(intf):
             if frame[12:14] == b'\x81\x00':  # 802.1Q VLAN tag
-                vlan_id = struct.unpack('!H', frame[14:16])[0] & 0x0FFF
-                frame = remove_vlan_tag(frame)
+                vlan_id = int.from_bytes(frame[14:16], 'big') & 0x0FFF
+                frame = frame[:12] + frame[16:]  # Remove VLAN tag
 
         # Determine outgoing interfaces
         if dst_mac == b'\xff\xff\xff\xff\xff\xff':  # Broadcast
@@ -64,12 +42,14 @@ class Switch(BaseHost):
 
     def _send_frame(self, frame, out_intf, vlan_id):
         if self.is_trunk_link(out_intf):
-            frame = add_vlan_tag(frame, vlan_id)
+            # Add VLAN tag for trunk links
+            vlan_tag = struct.pack('!H', 0x8100) + struct.pack('!H', vlan_id)
+            frame = frame[:12] + vlan_tag + frame[12:]
         self.send_frame(frame, out_intf)
 
     async def _clean_mac_table(self):
         while True:
-            current_time = time.time()
+            current_time = asyncio.get_event_loop().time()
             expired = [mac for mac, (_, timestamp) in self.mac_table.items()
                        if current_time - timestamp > self.aging_time]
             for mac in expired:
