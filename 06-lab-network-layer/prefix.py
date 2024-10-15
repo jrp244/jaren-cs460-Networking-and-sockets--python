@@ -107,160 +107,54 @@ def all_ones(n: int) -> int:
     return 2**n - 1
 
 def ip_prefix_mask(family: int, prefix_len: int) -> int:
-    '''Return prefix mask for the given address family and prefix length, as an
-    int.  The prefix_len most-significant bits should be set, and the remaining
-    (least significant) bits should not be set.  The total number of bits in
-    the value returned should be dictated by the address family: 32 bits for
-    socket.AF_INET (IPv4); 128 bits for socket.AF_INET6 (IPv6).
-
-    family: int, either socket.AF_INET (IPv4) or socket.AF_INET6 (IPv6)
-    prefix_len: int, the number of bits corresponding to the length of the
-        prefix
-
-    Examples:
-    >>> hex(ip_prefix_mask(socket.AF_INET, 24))
-    '0xffffff00'
-    >>> bin(ip_prefix_mask(socket.AF_INET, 24))
-    '0b11111111111111111111111100000000'
-    >>> hex(ip_prefix_mask(socket.AF_INET, 27))
-    '0xffffffe0'
-    >>> bin(ip_prefix_mask(socket.AF_INET, 27))
-    '0b11111111111111111111111111100000'
-    >>> hex(ip_prefix_mask(socket.AF_INET6, 50))
-    '0xffffffffffffc0000000000000000000'
-    >>> bin(ip_prefix_mask(socket.AF_INET6, 50))
-    '0b11111111111111111111111111111111111111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000'
-    >>> hex(ip_prefix_mask(socket.AF_INET6, 64))
-    '0xffffffffffffffff0000000000000000'
-    >>> bin(ip_prefix_mask(socket.AF_INET6, 64))
-    '0b11111111111111111111111111111111111111111111111111111111111111110000000000000000000000000000000000000000000000000000000000000000'
-    '''
-
-    #FIXME
-    return 0
+    if family == socket.AF_INET:
+        total_bits = 32
+    elif family == socket.AF_INET6:
+        total_bits = 128
+    else:
+        raise ValueError("Invalid address family")
+    
+    mask = ((1 << prefix_len) - 1) << (total_bits - prefix_len)
+    return mask
 
 def ip_prefix(address: int, family: int, prefix_len: int) -> int:
-    '''Return the prefix for the given IP address, address family, and
-    prefix length, as an int.  The prefix_len most-significant bits
-    from the IP address should be preserved in the prefix, and the
-    remaining (least significant) bits should not be set.  The total
-    number of bits in the prefix should be dictated by the address
-    family: 32 bits for socket.AF_INET (IPv4); 128 bits for
-    socket.AF_INET6 (IPv6).
-
-    address: int, integer value of an IP address (IPv4 or IPv6)
-    family: int, either socket.AF_INET (IPv4) or socket.AF_INET6 (IPv6)
-    prefix_len: int, the number of bits corresponding to the length of the
-        prefix
-
-    Examples:
-    >>> hex(ip_prefix(0xc00002ff, socket.AF_INET, 16))
-    '0xc0000000'
-    >>> hex(ip_prefix(0xc00002ff, socket.AF_INET, 24))
-    '0xc0000200'
-    >>> hex(ip_prefix(0xc00002ff, socket.AF_INET, 27))
-    '0xc00002e0'
-    >>> hex(ip_prefix(0x20010db80000ffffffffffffffffffff, socket.AF_INET6, 48))
-    '0x20010db8000000000000000000000000'
-    >>> hex(ip_prefix(0x20010db80000ffffffffffffffffffff, socket.AF_INET6, 50))
-    '0x20010db80000c0000000000000000000'
-    >>> hex(ip_prefix(0x20010db80000ffffffffffffffffffff, socket.AF_INET6, 64))
-    '0x20010db80000ffff0000000000000000'
-    '''
-
-    #FIXME
-    return 0
+    mask = ip_prefix_mask(family, prefix_len)
+    return address & mask
 
 def ip_prefix_total_addresses(family: int, prefix_len: int) -> int:
-    '''Return the total number IP addresses (_including_ the first and
-    last addresses within an IPv4 subnet, which cannot be used by a host
-    or router on that subnet) for the given address family and prefix
-    length.  The address family should be used to derive the address
-    length: 32 bits for socket.AF_INET (IPv4); 128 bits for
-    socket.AF_INET6 (IPv6).
+    if family == socket.AF_INET:
+        total_bits = 32
+    elif family == socket.AF_INET6:
+        total_bits = 128
+    else:
+        raise ValueError("Invalid address family")
+    
+    return 2 ** (total_bits - prefix_len)
 
-    family: int, either socket.AF_INET (IPv4) or socket.AF_INET6 (IPv6)
-    prefix_len: int, the number of bits corresponding to the length of the
-        prefix
 
-    Examples:
-    >>> ip_prefix_total_addresses(socket.AF_INET, 24)
-    256
-    >>> ip_prefix_total_addresses(socket.AF_INET, 27)
-    32
-    >>> ip_prefix_total_addresses(socket.AF_INET6, 120)
-    256
-    '''
-
-    #FIXME
-    return 0
-
-def ip_prefix_nth_address(prefix: int, family: int,
-        prefix_len: int, n: int) -> int:
-    '''Return the nth IP address within the prefix specified with the given
-    prefix, address family, and prefix length, as an int.  The prefix_len
-    most-significant bits from the from the prefix should be preserved in the
-    prefix, and the remaining (least significant) bits are incremented by n to
-    yield an IP address within the prefix. The total number of bits in the
-    prefix should be dictated by the address family: 32 bits for socket.AF_INET
-    (IPv4); 128 bits for socket.AF_INET6 (IPv6).
-
-    prefix: int, integer value of an IP prefix (IPv4 or IPv6)
-    family: int, either socket.AF_INET (IPv4) or socket.AF_INET6 (IPv6)
-    prefix_len: int, the number of bits corresponding to the length of the
-        prefix
-    n: int, the offset of the IP address within the prefix
-
-    Examples:
-    >>> hex(ip_prefix_nth_address(0xc0000200, socket.AF_INET, 24, 0))
-    '0xc0000200'
-    >>> hex(ip_prefix_nth_address(0xc0000200, socket.AF_INET, 24, 10))
-    '0xc000020a'
-    >>> hex(ip_prefix_nth_address(0xc0000200, socket.AF_INET, 24, 255))
-    '0xc00002ff'
-    >>> hex(ip_prefix_nth_address(0x20010db80000ffff0000000000000000, socket.AF_INET6, 64, 0))
-    '0x20010db80000ffff0000000000000000'
-    >>> hex(ip_prefix_nth_address(0x20010db80000ffff0000000000000000, socket.AF_INET6, 64, 0xa))
-    '0x20010db80000ffff000000000000000a'
-    >>> hex(ip_prefix_nth_address(0x20010db80000ffff0000000000000000, socket.AF_INET6, 64, 0xff))
-    '0x20010db80000ffff00000000000000ff'
-    '''
-
-    #FIXME
-    return 0
+def ip_prefix_nth_address(prefix: int, family: int, prefix_len: int, n: int) -> int:
+    if family == socket.AF_INET:
+        total_bits = 32
+    elif family == socket.AF_INET6:
+        total_bits = 128
+    else:
+        raise ValueError("Invalid address family")
+    
+    host_bits = total_bits - prefix_len
+    mask = (1 << host_bits) - 1
+    return prefix | (n & mask)
 
 def ip_prefix_last_address(prefix: int, family: int, prefix_len: int) -> int:
-    '''Return the last IP address within the prefix specified with the given
-    prefix, address family, and prefix length, as an int.  The prefix_len
-    most-significant bits from the from the prefix should be preserved in the
-    prefix, and the remaining (least significant) bits should all be set. The
-    total number of bits in the prefix should be dictated by the address
-    family: 32 bits for socket.AF_INET (IPv4); 128 bits for socket.AF_INET6
-    (IPv6).
-
-    prefix: int, integer value of an IP prefix (IPv4 or IPv6)
-    family: int, either socket.AF_INET (IPv4) or socket.AF_INET6 (IPv6)
-    prefix_len: int, the number of bits corresponding to the length of the
-        prefix
-    n: int, the offset of the IP address within the prefix
-
-    Examples:
-    >>> hex(ip_prefix_last_address(0xc0000000, socket.AF_INET, 16))
-    '0xc000ffff'
-    >>> hex(ip_prefix_last_address(0xc0000200, socket.AF_INET, 24))
-    '0xc00002ff'
-    >>> hex(ip_prefix_last_address(0xc0000200, socket.AF_INET, 27))
-    '0xc000021f'
-    >>> hex(ip_prefix_last_address(0x20010db8000000000000000000000000, socket.AF_INET6, 48))
-    '0x20010db80000ffffffffffffffffffff'
-    >>> hex(ip_prefix_last_address(0x20010db8000000000000000000000000, socket.AF_INET6, 50))
-    '0x20010db800003fffffffffffffffffff'
-    >>> hex(ip_prefix_last_address(0x20010db8000000000000000000000000, socket.AF_INET6, 64))
-    '0x20010db800000000ffffffffffffffff'
-    '''
-
-    #FIXME
-    return 0
+    if family == socket.AF_INET:
+        total_bits = 32
+    elif family == socket.AF_INET6:
+        total_bits = 128
+    else:
+        raise ValueError("Invalid address family")
+    
+    host_bits = total_bits - prefix_len
+    mask = (1 << host_bits) - 1
+    return prefix | mask
 
 
 class Prefix:
@@ -294,24 +188,18 @@ class Prefix:
                 (ip_int_to_str(self.prefix, self.family), self.prefix_len)
 
     def __contains__(self, address: str) -> bool:
-        '''Return True if the address corresponding to this IP address is
-        within this prefix, False otherwise.
-
-        address: str, 'x.x.x.x' or 'x:x::x'
-        '''
-
         if ':' in address:
             family = socket.AF_INET6
         else:
             family = socket.AF_INET
+
         if family != self.family:
             raise ValueError('Address can only be tested against prefix of ' + \
-                    'the same address family.')
+                             'the same address family.')
 
         address = ip_str_to_int(address)
-
-        #FIXME
-        return False
+        prefix_mask = ip_prefix_mask(self.family, self.prefix_len)
+        return (address & prefix_mask) == self.prefix
 
     def __hash__(self):
         return hash((self.prefix, self.prefix_len))

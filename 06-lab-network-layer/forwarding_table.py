@@ -68,11 +68,19 @@ class ForwardingTable(object):
 
     def get_entry(self, address: str) -> tuple[str, str]:
         '''Return the subnet entry having the longest prefix match of
-        address.  The entry is a tuple consisting of interface and
-        next-hop IP address.  If there is no match, return None, None.'''
+        address. The entry is a tuple consisting of interface and
+        next-hop IP address. If there is no match, return None, None.'''
+        address_int = ip_str_to_int(address)
+        best_match = None
+        best_prefix_len = -1
 
-        #FIXME - complete the rest of the method
-        return None, None
+        for prefix, (intf, next_hop) in self.entries.items():
+            if address_int & prefix.prefix == prefix.prefix:
+                if prefix.prefix_len > best_prefix_len:
+                    best_match = (intf, next_hop)
+                    best_prefix_len = prefix.prefix_len
+
+        return best_match if best_match else (None, None)
 
     def get_all_entries(self, family: int=None,
             resolve: bool=False, global_only: bool=True):
