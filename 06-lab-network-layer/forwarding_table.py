@@ -38,7 +38,7 @@ class ForwardingTable(object):
     def __init__(self):
         self.entries = {}
 
-    def add_entry(self, prefix: str, intf: str, next_hop: str) -> None:
+    def add_entry(self, prefix: str, intf: int, next_hop: str) -> None:
         '''Add forwarding entry mapping prefix to interface and next hop
         IP address.'''
 
