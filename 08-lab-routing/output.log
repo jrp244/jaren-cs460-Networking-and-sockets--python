@@ -1,0 +1,8 @@
+Script started on 2024-10-28 19:07:47-06:00 [COMMAND="cougarnet --disable-ipv6 --stop=30 --terminal=none scenario1.cfg" TERM="xterm-256color" TTY="/dev/pts/0" COLUMNS="80" LINES="24"]
+Ctrl-c to quit
+7.010 [1m  r1[0m  START
+8.010 [1m  r1[0m  Sending ICMP packet to r5
+9.037 [1m  r2[0m  Sending ICMP packet to r4
+11.009 [1m  r1[0m  STOP
+
+Script done on 2024-10-28 19:08:20-06:00 [COMMAND_EXIT_CODE="0"]
