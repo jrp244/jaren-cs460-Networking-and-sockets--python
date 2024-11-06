@@ -26,10 +26,21 @@ class IPv4Header:
 
     @classmethod
     def from_bytes(cls, hdr: bytes) -> IPv4Header:
-        return cls(0, 0, 0, 0, '0.0.0.0', '0.0.0.0')
+        version_ihl, tos, total_length, id, flags_fragment, ttl, protocol, checksum, src, dst = struct.unpack('!BBHHHBBH4s4s', hdr)
+        length = total_length
+        src = ip_binary_to_str(src)
+        dst = ip_binary_to_str(dst)
+        return cls(length, ttl, protocol, checksum, src, dst)
 
     def to_bytes(self) -> bytes:
-        return b''
+        version_ihl = (4 << 4) | 5  # IPv4 and 5 32-bit words in header
+        tos = 0
+        id = 0
+        flags_fragment = 0
+        src_bytes = ip_str_to_binary(self.src)
+        dst_bytes = ip_str_to_binary(self.dst)
+        return struct.pack('!BBHHHBBH4s4s', version_ihl, tos, self.length, id, flags_fragment, 
+                           self.ttl, self.protocol, self.checksum, src_bytes, dst_bytes)
 
 
 class UDPHeader:
@@ -66,10 +77,33 @@ class TCPHeader:
         self.ack = ack
         self.flags = flags
         self.checksum = checksum
+        self.window = TCP_RECEIVE_WINDOW  # Add this line
 
     @classmethod
     def from_bytes(cls, hdr: bytes) -> TCPHeader:
-        return cls(0, 0, 0, 0, 0, 0)
+        if len(hdr) < 20:
+            raise ValueError("TCP header must be at least 20 bytes")
+        
+        sport, dport, seq, ack, offset_flags, window, checksum, urgent_ptr = struct.unpack('!HHIIHHHH', hdr[:20])
+        data_offset = (offset_flags >> 12) * 4
+        flags = offset_flags & 0x3F
+        
+        if len(hdr) < data_offset:
+            raise ValueError(f"TCP header length ({len(hdr)}) is less than data offset ({data_offset})")
+        
+        tcp_header = cls(sport, dport, seq, ack, flags, checksum)
+        tcp_header.window = window  # Set the window size
+        return tcp_header
 
     def to_bytes(self) -> bytes:
-        return b''
+        offset_flags = (5 << 12) | self.flags  # 5 32-bit words in header
+        return struct.pack('!HHIIHHHHH', 
+                        self.sport, 
+                        self.dport, 
+                        self.seq, 
+                        self.ack,
+                        offset_flags, 
+                        self.window,
+                        self.checksum, 
+                        0,  # Urgent pointer, set to 0
+                        0)  # Options, set to 0

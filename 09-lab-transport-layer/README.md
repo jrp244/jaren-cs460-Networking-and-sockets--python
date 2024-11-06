@@ -481,6 +481,17 @@ When it is working properly, test also with the `--terminal=none` option:
 ```bash
 $ cougarnet --disable-ipv6 --terminal=none scenario1.cfg
 ```
+Note: I think this is working
+cougarnet --disable-ipv6 --terminal=none scenario1.cfg
+Ctrl-c to quit
+4.420    a  START
+5.421    a  Netcat sending UDP msg to 10.0.0.2:1234: abcdefghijklmnop
+5.445    b  Host received UDP msg (10.0.0.1:26462 -> 10.0.0.2:1234): abcdefghijklmnop
+7.421    a  Netcat sending UDP msg to 10.0.0.2:1234: abcdefghijklmnop
+7.445    b  Host received UDP msg (10.0.0.1:26462 -> 10.0.0.2:1234): abcdefghijklmnop
+8.439    c  Netcat sending UDP msg to 10.0.0.2:1234: abcdefghijklmnop
+8.463    b  Host received UDP msg (10.0.0.3:10885 -> 10.0.0.2:1234): abcdefghijklmnop
+9.425    a  STOP
 
 
 # Part 3 - TCP Sockets and Three-Way Handshake
@@ -501,7 +512,7 @@ of two ways:
    but that is not done within the method.
  - When an instance of the `TCPListenerSocket` class calls its own
    `handle_packet()` method.  Because a new socket is required for every TCP
-   connection, the `TCPListenerSocket` class exists to simply handle packets
+   connection, the `TCPListenerSocket` class exists to simply handle  packets
    that are for new TCP connection requests, instantiating a new `TCPSocket`
    with each request, so each 4-tuple (remote address, remote port, local
    address, local port) uniquely maps to its own `TCPSocket` instance.  In the

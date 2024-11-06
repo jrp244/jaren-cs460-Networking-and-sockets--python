@@ -40,17 +40,40 @@ class UDPSocket:
         self.buffer = []
 
     def handle_packet(self, pkt: bytes) -> None:
-        self.buffer.append((b'', '0.0.0.0', 0))
+        # Parse IP header
+        ip_hdr = IPv4Header.from_bytes(pkt[:IP_HEADER_LEN])
+        
+        # Parse UDP header
+        udp_hdr = UDPHeader.from_bytes(pkt[IP_HEADER_LEN:UDPIP_HEADER_LEN])
+        
+        # Extract data
+        data = pkt[UDPIP_HEADER_LEN:]
+        
+        # Append to buffer
+        self.buffer.append((data, ip_hdr.src, udp_hdr.sport))
+        
+        # Notify application
         self._notify_on_data()
 
     @classmethod
-    def create_packet(cls, src: str, sport: int, dst: str, dport: int,
-            data: bytes=b'') -> bytes:
-        pass
+    def create_packet(cls, src: str, sport: int, dst: str, dport: int, data: bytes=b'') -> bytes:
+        # Create IP header
+        ip_header = IPv4Header(20 + 8 + len(data), 64, IPPROTO_UDP, 0, src, dst)
+        
+        # Create UDP header
+        udp_header = UDPHeader(sport, dport, 8 + len(data), 0)
+        
+        # Combine headers and data
+        return ip_header.to_bytes() + udp_header.to_bytes() + data
 
-    def send_packet(self, remote_addr: str, remote_port: int,
-            data: bytes) -> None:
-        pass
+
+    def send_packet(self, remote_addr: str, remote_port: int, data: bytes) -> None:
+        # Create the packet
+        packet = self.create_packet(self._local_addr, self._local_port, remote_addr, remote_port, data)
+        
+        # Send the packet
+        self._send_ip_packet(packet)
+
 
     def recvfrom(self) -> tuple[bytes, str, int]:
         return self.buffer.pop(0)
@@ -161,17 +184,45 @@ class TCPSocket(TCPSocketBase):
 
 
     def initiate_connection(self) -> None:
-        pass
+        self.base_seq_self = self.initialize_seq()
+        self.send_packet(self.base_seq_self, 0, TCP_FLAGS_SYN)
+        self.state = TCP_STATE_SYN_SENT
 
     def handle_syn(self, pkt: bytes) -> None:
-        pass
+        ip_hdr = IPv4Header.from_bytes(pkt[:IP_HEADER_LEN])
+        tcp_hdr = TCPHeader.from_bytes(pkt[IP_HEADER_LEN:TCPIP_HEADER_LEN])
+        
+        if not tcp_hdr.flags & TCP_FLAGS_SYN:
+            return
+        
+        self.base_seq_other = tcp_hdr.seq
+        self.base_seq_self = self.initialize_seq()
+        self.send_packet(self.base_seq_self, self.base_seq_other + 1, TCP_FLAGS_SYN | TCP_FLAGS_ACK)
+        self.state = TCP_STATE_SYN_RECEIVED
 
     def handle_synack(self, pkt: bytes) -> None:
-        pass
+        ip_hdr = IPv4Header.from_bytes(pkt[:IP_HEADER_LEN])
+        tcp_hdr = TCPHeader.from_bytes(pkt[IP_HEADER_LEN:TCPIP_HEADER_LEN])
+        
+        if not (tcp_hdr.flags & TCP_FLAGS_SYN and tcp_hdr.flags & TCP_FLAGS_ACK):
+            return
+        if tcp_hdr.ack != self.base_seq_self + 1:
+            return
+        
+        self.base_seq_other = tcp_hdr.seq
+        self.send_packet(self.base_seq_self + 1, self.base_seq_other + 1, TCP_FLAGS_ACK)
+        self.state = TCP_STATE_ESTABLISHED
 
     def handle_ack_after_synack(self, pkt: bytes) -> None:
-        pass
-
+        ip_hdr = IPv4Header.from_bytes(pkt[:IP_HEADER_LEN])
+        tcp_hdr = TCPHeader.from_bytes(pkt[IP_HEADER_LEN:TCPIP_HEADER_LEN])
+        
+        if tcp_hdr.flags & TCP_FLAGS_SYN or not tcp_hdr.flags & TCP_FLAGS_ACK:
+            return
+        if tcp_hdr.ack != self.base_seq_self + 1:
+            return
+        
+        self.state = TCP_STATE_ESTABLISHED
     def continue_connection(self, pkt: bytes) -> None:
         if self.state == TCP_STATE_LISTEN:
             self.handle_syn(pkt)
@@ -186,11 +237,20 @@ class TCPSocket(TCPSocketBase):
     @classmethod
     def create_packet(cls, src: str, sport: int, dst: str, dport: int,
             seq: int, ack: int, flags: int, data: bytes=b'') -> bytes:
-        return b''
+        # Create IP header
+        ip_header = IPv4Header(IP_HEADER_LEN + TCP_HEADER_LEN + len(data), 64, IPPROTO_TCP, 0, src, dst)
+        
+        # Create TCP header
+        tcp_header = TCPHeader(sport, dport, seq, ack, flags, 0)
+        
+        # Combine headers and data
+        return ip_header.to_bytes() + tcp_header.to_bytes() + data
 
-    def send_packet(self, seq: int, ack: int, flags: int,
-            data: bytes=b'') -> None:
-        pass
+    def send_packet(self, seq: int, ack: int, flags: int, data: bytes=b'') -> None:
+        pkt = self.create_packet(self._local_addr, self._local_port,
+                                 self._remote_addr, self._remote_port,
+                                 seq, ack, flags, data)
+        self._send_ip_packet(pkt)
 
     def handle_data(self, pkt: bytes) -> None:
         pass
